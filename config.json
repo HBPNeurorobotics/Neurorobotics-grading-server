@@ -1,0 +1,13 @@
+{
+  "refreshInterval": 5000,
+  "auth": {
+    "renewInternal": 600000,
+    "clientId": "0dcfb392-32c7-480c-ae18-cbaf29e8a6b1",
+    "clientSecret": "<client_oidc_secret>",
+    "url": "https://services.humanbrainproject.eu/oidc",
+    "deactivate": true
+  },
+  "port": 3000,
+  "databaseURL": "https://nrp-mooc-database.firebaseio.com",
+  "fileStorePath": "/tmp/fileStore"
+}
