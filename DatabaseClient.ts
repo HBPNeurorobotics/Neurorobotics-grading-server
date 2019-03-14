@@ -56,7 +56,7 @@ export default class DatabaseClient {
       userInfo: data.userInfo,
       fileName: data.fileName,
       fileContent: data.fileContent,
-      answer: String(data.answer),
+      answer: Number(parseFloat(data.answer)),
       date: new Date()
     });
   }

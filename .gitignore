@@ -59,3 +59,6 @@ typings/
 
 # next.js build output
 .next
+
+# serviceAccount.json (holds the credentials of the database)
+serviceAccount.json
