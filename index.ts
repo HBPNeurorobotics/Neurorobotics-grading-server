@@ -6,6 +6,7 @@ const app = express();
 app.use(bodyParser.urlencoded({
   extended: true
 }));
+app.use(bodyParser.json());
 
 import configurationManager from './configurationManager';
 import DatabaseClient from './DatabaseClient';
@@ -26,19 +27,6 @@ const getAuthToken = req => {
     throw 'Authorization header missing';
   return authorization.length > 7 && authorization.substr(7);
 };
-
-// respond with "hello world" when a GET request is made to the homepage
-app.get('/hello', function(req, res) {
-  res.send('hello world');
-});
-
-// POST method route
-app.post('/test_submission', function (req, res) {
-  const token = getAuthToken(req);
-  requestHandler.getUserInfo('me', token).then(
-    (info) => res.send('The user has the following user_id: ' + info.id)
-  )
-});
 
 const handleError = (res, err) => {
   const errType = Object.prototype.toString.call(err).slice(8, -1);
@@ -89,5 +77,5 @@ app.post('/submission', async (req, res) => {
 
 
 app.listen(3000, () =>
-  console.log('Example app listening on port 3000!'),
+  console.log('Server listening on port 3000!'),
 );

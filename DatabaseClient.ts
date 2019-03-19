@@ -48,9 +48,9 @@ export default class DatabaseClient {
 
 
   async submitToFirebase(data) {
-    const activityLogsCollection = this.db.collection('submissions');
+    const submissionsCollection = this.db.collection('submissions');
     // Add the activity entry in the Firestore database
-    const doc = activityLogsCollection.doc();
+    const doc = submissionsCollection.doc();
     return doc.set({
       submissionInfo: data.submissionInfo,
       userInfo: data.userInfo,
@@ -62,7 +62,6 @@ export default class DatabaseClient {
   }
 
   async submit(data) {
-    if (!this.config) return q.reject(`No activity logs enabled.`);
     await this.submitToFirebase(data);
     return q.resolve('Successful submission to database');
   }
