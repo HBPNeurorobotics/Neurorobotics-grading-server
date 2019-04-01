@@ -32,6 +32,13 @@
     "url": "https://github.com/HBPNeurorobotics/Neurorobotics-grading-server"
   },
   "keywords": [],
-  "author": "",
+  "engines": {
+    "node": ">=7"
+  }, 
+  "author": "NRP Software Development Team",
+  "contributors": [
+    "Claudio Sousa", 
+    "Luc Guyot"
+  ],
   "license": "ISC"
 }
