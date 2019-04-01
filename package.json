@@ -1,6 +1,6 @@
 {
   "name": "neurorobotics-grading-server",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "NodeJS server designed to record student grades (MOOC) in a database",
   "main": "index.ts",
   "dependencies": {
@@ -24,7 +24,7 @@
   "scripts": {
     "start": "NODE_ENV=production node dist/index.js",
     "build": "tsc",
-    "copy": "cp config.json dist/ && cp serviceAccount.json dist/"
+    "copy": "cp config.json dist/"
   },
   "repository": {
     "type": "git",
