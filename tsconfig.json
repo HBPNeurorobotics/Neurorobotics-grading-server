@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2018",
+    "allowJs": true,
+    "checkJs": false,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "strict": true,
+    "baseUrl": "types",
+    "esModuleInterop": true,
+    "noUnusedParameters": false,
+    "noImplicitThis": true,
+    "noUnusedLocals": false,
+    "types": ["node"],
+    "typeRoots": [],
+    "paths": {
+      "*": ["node_modules/@types/*", "src/types/*"]
+    }
+  },
+  "include": ["**/*"],
+  "exclude": ["dist/**/*"]
+}
