@@ -52,11 +52,11 @@ export default class DatabaseClient {
     // Add the activity entry in the Firestore database
     const doc = submissionsCollection.doc();
     return doc.set({
-      submissionInfo: data.submissionInfo,
+      submissionInfo: JSON.parse(data.submissionInfo),
       userInfo: data.userInfo,
       fileName: data.fileName,
       fileContent: data.fileContent,
-      answer: Number(parseFloat(data.answer)),
+      answer: JSON.parse(data.answer),
       date: new Date()
     });
   }
