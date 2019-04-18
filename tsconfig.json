@@ -15,7 +15,7 @@
     "noUnusedParameters": false,
     "noImplicitThis": true,
     "noUnusedLocals": false,
-    "types": ["node"],
+    "types": ["node", "mocha"],
     "typeRoots": [],
     "paths": {
       "*": ["node_modules/@types/*", "src/types/*"]
