@@ -65,3 +65,6 @@ serviceAccount.json
 
 # dist folder for deployed application
 dist
+
+# certificates, for development only
+sslcert
