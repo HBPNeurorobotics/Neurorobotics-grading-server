@@ -49,20 +49,52 @@ export default class DatabaseClient {
 
   async submitToFirebase(data) {
     const submissionsCollection = this.db.collection('submissions');
-    // Add the activity entry in the Firestore database
+    // Add the submission entry in the Firestore database
     const doc = submissionsCollection.doc();
     return doc.set({
-      submissionInfo: data.submissionInfo,
-      userInfo: data.userInfo,
-      fileName: data.fileName,
-      fileContent: data.fileContent,
-      answer: data.answer,
+      ...data,
       date: new Date()
     });
   }
 
-  async submit(data) {
+  async getEdxGradeIdentifiers(token) {
+    if (!token) return q.reject('Missing token: the submission is rejected.');
+    return this.db.collection('edx-grade-identifiers')
+    .where('token', '==', token)
+    .limit(1)
+    .get()
+    .then( querySnapshot => {
+      let match;
+      querySnapshot.forEach(doc => {
+        match = doc;
+      });
+      if (!querySnapshot.empty) return match.data();
+      else return q.reject({
+        msg:
+        'Your token is invalid. ' +
+        'Please check that you made a copy from the correct edX exercise.',
+        code: 404 
+      });
+    })
+  }
+
+  async createSubmissionEntry(data) {
+    data.edx = await this.getEdxGradeIdentifiers(data.token);
     await this.submitToFirebase(data);
     return q.resolve('Successful submission to database');
   }
+
+
+  async createEdxGradeInFirebase(data) {
+    const edxGradesCollection = this.db.collection('edx-grade-identifiers');
+    // Add the edx lis grade entry in the Firestore database
+    const doc = edxGradesCollection.doc();
+    return doc.set(data);
+  }
+
+  async createEdxGradeEntry(data) {
+    await this.createEdxGradeInFirebase(data);
+    return q.resolve('Successful creation of an edX grade entry in the database');
+  }
+
 }
