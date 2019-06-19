@@ -1,17 +1,17 @@
 
 const express = require('express');
-const fs = require('fs');
+const lti = require('ims-lti')
 const q = require('q');
 const ejs = require('ejs');
-
 const http = require('http');
-/*
+const fs = require('fs');
+
 // For debugging on https://localhost
 const https = require('https');
 const privateKey  = fs.readFileSync('sslcert/server.key', 'utf8');
 const certificate = fs.readFileSync('sslcert/server.crt', 'utf8');
 const credentials = {key: privateKey, cert: certificate};
-*/
+
 
 const app = express();
 app.use(express.json());
@@ -36,6 +36,11 @@ const getAuthToken = req => {
   if (!authorization || authorization.length < 7)
     throw 'Authorization header missing';
   return authorization.length > 7 && authorization.substr(7);
+};
+
+const authorizationError = {
+  code: 401, 
+  msg: 'Unauthorized request'
 };
 
 const handleError = (res, err) => {
@@ -88,32 +93,87 @@ app.post('/submission', async (req, res) => {
 
 app.post('/edx-launch', async (req, res) => {
   try {
-    let launchParameters = {};
-   ['lis_result_sourcedid', // unique id provided by edX for the question/exercise
-    'lis_outcome_service_url', // the url used to submit the grade to edX 
-    'oauth_consumer_key', 'oauth_nonce', 'oauth_timestamp', // used for the OAuth1 protocol
-    'custom_header', 'custom_subheader' // used to check that the user submits an answer to the correct exercise (customized in edX LTI Consumer unit)
-   ]
-   .forEach(key => {
-      launchParameters[key] = req.body[key];
+    const ltiKey = config.ltiConsumerKey;
+    const ltiSecret = config.ltiConsumerSecret;
+    let provider = new lti.Provider(ltiKey, ltiSecret);
+    let validator = provider.valid_request.bind(provider);
+    await q.denodeify(validator)(req)
+    .then(isValid => {
+      if (!isValid) {
+        const msg = 'Invalid LTI launch request';
+        throw(msg);
+      }
     })
+    .catch(err => {
+      console.error('LTI validation error');
+      throw(err);
+    });
     const token = utils.generateToken(
       config.tokenEncryptionKey, 
-      launchParameters['lis_result_sourcedid']
+      req.body['lis_result_sourcedid']
     );
-    const dataBaseRequest = await databaseClient.createEdxGradeEntry({
-      ...launchParameters,
+    // We store the req object in the Firebase database 
+    // because we need it for later submission to edX (Oauth1 signature and LTI parameters required).
+    // Some req properties are filtered out because they cannot be serialized (they are not useful for the edx send_replace call).
+    // Below are the fields required to build an Oauth1 signature, 
+    // see https://github.com/instructure/ims-lti-1/blob/master/src/hmac-sha1.coffee.
+    const INCLUDE = ['body', 'raw', 'originalUrl', 'protocol', 'method', 'headers']; 
+    let filteredRequest = {};
+    Object.keys(req).forEach(key => {
+      if (INCLUDE.indexOf(key) !== -1) filteredRequest[key] = req[key]; 
+    });
+    filteredRequest['connection'] = { encrypted: req.connection.encrypted };
+    await databaseClient.createEdxGradeEntry({
+      request: filteredRequest,
       token  
     })
     .catch(err => { throw(err) });
     const launchWidget = await q.denodeify(ejs.renderFile)('views/launch_exercise_show_token.ejs', 
       {
         token,
-        exercise: launchParameters['custom_subheader'],
+        exercise: req.body['custom_subheader'],
         redirect: 'https://collab.humanbrainproject.eu/#/collab'
       }
     );
     res.send(launchWidget);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/edx-submission/:userId/:header', async (req, res) => {
+  try {
+    if (getAuthToken(req) !== config.adminToken) throw(authorizationError);
+    const dataBaseRequest = await databaseClient.submitUserGradesToEdx(
+       req.params.userId, 
+       req.params.header
+    )
+    .catch(err => { throw(err) });
+    res.send(dataBaseRequest);
+  } catch (err) {
+    console.log(err);
+    handleError(res, err);
+  }
+});
+
+
+app.post('/final-grades/:userId', async (req, res) => {
+  try {
+    if (getAuthToken(req) !== config.adminToken) throw(authorizationError);
+    const dataBaseRequest = await databaseClient.appendUserFinalGrades(req.params.userId, req.body)
+    .catch(err => { throw(err) });
+    res.send(dataBaseRequest);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/final-grades', async (req, res) => {
+  try {
+    if (getAuthToken(req) !== config.adminToken) throw(authorizationError);
+    const dataBaseRequest = await databaseClient.appendFinalGrades(req.body)
+    .catch(err => { throw(err) });
+    res.send(dataBaseRequest);
   } catch (err) {
     handleError(res, err);
   }
@@ -136,7 +196,7 @@ app.get('/check-token', async (req, res) => {
 
 // Express configuration
 const httpServer = http.createServer(app);
-// const httpsServer = https.createServer(credentials, app);
+const httpsServer = https.createServer(credentials, app);
 
 httpServer.listen(3000, () => console.log('Server listening on port 3000!'));
-//httpsServer.listen(8443, () => console.log('Server listening on port 8443!'));
+httpsServer.listen(8443, () => console.log('Server listening on port 8443!'));

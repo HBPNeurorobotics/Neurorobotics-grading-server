@@ -23,6 +23,8 @@
  * ---LICENSE-END**/
 'use strict';
 
+import EdxClient from './EdxClient';
+
 const  q = require('q');
 // mocked in tests
 // tslint:disable-next-line: prefer-const
@@ -30,17 +32,18 @@ let firebase = require('firebase-admin');
 
 export default class DatabaseClient {
   private db;
+  private edxClient;
 
   constructor(private config) {
-      this.config = config;
-      this.initializeFirebase();
+      this.initializeFirebase(config);
+      this.edxClient = new EdxClient(config);
   }
 
-  initializeFirebase() {
+  initializeFirebase(config) {
     const serviceAccount = require('./serviceAccount.json');
     firebase.initializeApp({
       credential: firebase.credential.cert(serviceAccount),
-      databaseURL: this.config.databaseURL
+      databaseURL: config.databaseURL
     });
     this.db = firebase.firestore();
     this.db.settings({ timestampsInSnapshots: true });
@@ -89,6 +92,7 @@ export default class DatabaseClient {
     const edxGradesCollection = this.db.collection('edx-grade-identifiers');
     // Add the edx lis grade entry in the Firestore database
     const doc = edxGradesCollection.doc();
+    console.log(data);
     return doc.set(data);
   }
 
@@ -97,4 +101,88 @@ export default class DatabaseClient {
     return q.resolve('Successful creation of an edX grade entry in the database');
   }
 
+  async appendUserFinalGrades(userId, data) {
+    const userRef = this.db.collection('users').doc(userId);
+    let doc = await userRef.get();
+    let userDoc = doc.data();
+    let response = data;
+    let error;
+    const submittedGrades = data.finalGrades;
+    Object.keys(submittedGrades).forEach(header => {
+      const grades =  submittedGrades[header];
+      let docSubheaders = userDoc[header];
+      Object.keys(grades).forEach(subheader => {
+        const grade = grades[subheader];
+        if (docSubheaders[subheader]){ 
+          docSubheaders[subheader].finalGrade = grade;
+        } else { 
+          error = `User ${userId} has no submission for ${subheader}. Grading in edX will not be possible.`;
+        }
+      })
+    })
+    if (error) return q.reject(error);
+    await userRef.update(userDoc);
+    response.msg = `The grades of user ${userId} have been successfully updated.`
+    return q.resolve(response);
+  }
+
+  async appendFinalGrades(data) {
+    const usersRef = this.db.collection('users');
+    let response = data;
+    const submittedGrades = data.finalGrades.users;
+    try {
+      Object.keys(submittedGrades).forEach(async userId => {
+        const userGrades = submittedGrades[userId];
+        let userRef = usersRef.doc(userId);
+        let doc = await userRef.get();
+        let userDoc = doc.data();
+        if (!userDoc) throw({ msg: `User ${userId} has no submission at all.`});
+        Object.keys(userGrades).forEach(header => {
+          const grades = userGrades[header];
+          if (userDoc[header]){
+            Object.keys(grades).forEach(async subheader => {
+              const grade = grades[subheader];
+              if (userDoc[header][subheader]) { 
+                userDoc[header][subheader].finalGrade = grade;
+                await userRef.update(userDoc);
+            } else throw({ msg: `User ${userId} has no submission for ${subheader}.` });
+            })
+          } else throw({ msg: `User ${userId} has no submission for ${header}.` });
+        })
+      })
+    } catch(error) {
+      if (!error.msg) error.msg = '';
+      error.msg += ' Grading in edX will not be possible.';
+      return q.reject(error);
+    }
+    response.msg = `The grades have been successfully updated.`
+    return q.resolve(response);
+  }
+
+  async submitUserGradesToEdx(userId, header) {
+    header = decodeURIComponent(header);
+    const userRef = this.db.collection('users').doc(userId);
+    let doc = await userRef.get();
+    let userDoc = doc.data();
+    let promises:Promise<any>[] = [];
+    if (!userDoc[header]) return q.reject(`User ${userId} has no submission for ${header}`);
+    try {
+      Object.keys(userDoc[header]).forEach(async subheader => {
+        const userSubheader = userDoc[header][subheader];
+        const grade = userSubheader.finalGrade;
+        if (!grade) throw(`User ${userId} has no final grade for ${header}/${subheader}.`);
+        const edxIdentifiers = userSubheader.edx;
+        if (!edxIdentifiers) throw(`User ${userId} has no edX identifiers for ${header}/${subheader}.`);
+        promises.push(this.edxClient.ltiSendAndReplace(grade, edxIdentifiers.request));
+      })
+    } catch(error) {
+      if (!error.msg) error.msg = '';
+      error.msg += ' Submission to edX aborted.';
+      return q.reject(error);
+    }
+    return await q.all(promises)
+    .then(() => 
+      q.resolve(`The grades of users ${userId} for ${header} have been successfully submitted to edX.`) 
+    )
+  }
 }
