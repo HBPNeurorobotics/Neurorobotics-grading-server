@@ -112,11 +112,12 @@ app.post('/edx-launch', async (req, res) => {
       config.tokenEncryptionKey, 
       req.body['lis_result_sourcedid']
     );
-    // We store the req object in the Firebase database 
-    // because we need it for later submission to edX (Oauth1 signature and LTI parameters required).
-    // Some req properties are filtered out because they cannot be serialized (they are not useful for the edx send_replace call).
-    // Below are the fields required to build an Oauth1 signature, 
-    // see https://github.com/instructure/ims-lti-1/blob/master/src/hmac-sha1.coffee.
+    // We store part of the req object in the Firebase database 
+    // We need req's body for later submission to edX, actually two of its LTI parameters:
+    // 'lis_outcome_service_url', the url where to submit the edX grade, and
+    // lis_result_sourcedid', a unique identifier of the pair (edX LTI unit, edX user)
+    // Some req properties are filtered out as they cannot be serialized 
+    // (none of them, except body, are useful for the edX send-and-replace call).
     const INCLUDE = ['body', 'raw', 'originalUrl', 'protocol', 'method', 'headers']; 
     let filteredRequest = {};
     Object.keys(req).forEach(key => {
@@ -156,6 +157,17 @@ app.post('/edx-submission/:userId/:header', async (req, res) => {
   }
 });
 
+app.post('/edx-submission/:header', async (req, res) => {
+  try {
+    if (getAuthToken(req) !== config.adminToken) throw(authorizationError);
+    const dataBaseRequest = await databaseClient.submitGradesToEdx(req.params.header)
+    .catch(err => { throw(err) });
+    res.send(dataBaseRequest);
+  } catch (err) {
+    console.log(err);
+    handleError(res, err);
+  }
+});
 
 app.post('/final-grades/:userId', async (req, res) => {
   try {

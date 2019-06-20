@@ -106,23 +106,27 @@ export default class DatabaseClient {
     let doc = await userRef.get();
     let userDoc = doc.data();
     let response = data;
-    let error;
     const submittedGrades = data.finalGrades;
-    Object.keys(submittedGrades).forEach(header => {
-      const grades =  submittedGrades[header];
-      let docSubheaders = userDoc[header];
-      Object.keys(grades).forEach(subheader => {
-        const grade = grades[subheader];
-        if (docSubheaders[subheader]){ 
-          docSubheaders[subheader].finalGrade = grade;
-        } else { 
-          error = `User ${userId} has no submission for ${subheader}. Grading in edX will not be possible.`;
-        }
+    try {
+      Object.keys(submittedGrades).forEach(header => {
+        const grades =  submittedGrades[header];
+        let docSubheaders = userDoc[header];
+        if (!docSubheaders) throw({ msg: `User ${userId} has no submission for ${header}.` });
+        Object.keys(grades).forEach(subheader => {
+          const grade = grades[subheader];
+          if (docSubheaders[subheader]){ 
+            docSubheaders[subheader].finalGrade = grade;
+          } else { 
+          throw({ msg: `User ${userId} has no submission for ${subheader}. Grading in edX will not be possible.`});
+          }
+        })
       })
-    })
-    if (error) return q.reject(error);
-    await userRef.update(userDoc);
-    response.msg = `The grades of user ${userId} have been successfully updated.`
+      await userRef.update(userDoc)
+      .catch(err => { throw(err); });
+    } catch(error) {
+      return q.reject(error);
+    }
+    response.msg = `The grades of user ${userId} have been successfully updated in NRP database.`
     return q.resolve(response);
   }
 
@@ -130,6 +134,7 @@ export default class DatabaseClient {
     const usersRef = this.db.collection('users');
     let response = data;
     const submittedGrades = data.finalGrades.users;
+    let promises:Promise<any>[] = [];
     try {
       Object.keys(submittedGrades).forEach(async userId => {
         const userGrades = submittedGrades[userId];
@@ -144,7 +149,7 @@ export default class DatabaseClient {
               const grade = grades[subheader];
               if (userDoc[header][subheader]) { 
                 userDoc[header][subheader].finalGrade = grade;
-                await userRef.update(userDoc);
+                promises.push(userRef.update(userDoc));
             } else throw({ msg: `User ${userId} has no submission for ${subheader}.` });
             })
           } else throw({ msg: `User ${userId} has no submission for ${header}.` });
@@ -155,17 +160,19 @@ export default class DatabaseClient {
       error.msg += ' Grading in edX will not be possible.';
       return q.reject(error);
     }
-    response.msg = `The grades have been successfully updated.`
-    return q.resolve(response);
+    return await q.all(promises).then( () => {
+      response.msg = `The grades have been successfully updated in NRP database.`
+      return q.resolve(response);
+    });
   }
 
-  async submitUserGradesToEdx(userId, header) {
-    header = decodeURIComponent(header);
-    const userRef = this.db.collection('users').doc(userId);
-    let doc = await userRef.get();
-    let userDoc = doc.data();
+  async submitUserGrades(userDoc, header, selectedUser=false) {
+    const userId = userDoc['userInfo']['id'];
     let promises:Promise<any>[] = [];
-    if (!userDoc[header]) return q.reject(`User ${userId} has no submission for ${header}`);
+    if (!userDoc[header]) {
+      if (selectedUser) return q.reject(`User ${userId} has no submission for ${header}`);
+      else return q.resolve(); // We ignore this user, as she/he didn't submit anything yet for 'header'
+    }
     try {
       Object.keys(userDoc[header]).forEach(async subheader => {
         const userSubheader = userDoc[header][subheader];
@@ -182,7 +189,30 @@ export default class DatabaseClient {
     }
     return await q.all(promises)
     .then(() => 
-      q.resolve(`The grades of users ${userId} for ${header} have been successfully submitted to edX.`) 
+      q.resolve(`The grades of user ${userId} for ${header} have been successfully submitted to edX.`) 
+    )
+  }
+
+  async submitUserGradesToEdx(userId, header) {
+    header = decodeURIComponent(header);
+    const userRef = this.db.collection('users').doc(userId);
+    let doc = await userRef.get();
+    let userDoc = doc.data();
+    return await this.submitUserGrades(userDoc, header, true);
+  }
+
+  async submitGradesToEdx(header) {
+    header = decodeURIComponent(header);
+    const usersRef = this.db.collection('users');
+    let users = await usersRef.get();
+    let promises:Promise<any>[] = [];
+    users.docs.forEach(user => {
+       const userDoc = user.data();
+       promises.push(this.submitUserGrades(userDoc, header));
+    });
+    return await q.all(promises)
+    .then(() => 
+      q.resolve(`The grades of all users for ${header} have been successfully submitted to edX.`) 
     )
   }
 }

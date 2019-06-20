@@ -18,7 +18,8 @@
     "q": "^1.4.1",
     "request": "2.83.0",
     "request-promise": "^4.2.1",
-    "rewire": "^2.5.2"
+    "rewire": "^2.5.2",
+    "cryptiles": ">=4.1.2"
   },
   "devDependencies": {
     "ts-node": "^7.0.1",
@@ -39,7 +40,8 @@
     "nock": "^9.1.6",
     "prettier": "^1.16.4",
     "sinon": "1.17.5",
-    "tslint": "^5.12.0"
+    "tslint": "^5.12.0",
+    "cryptiles": ">=4.1.2"
   },
   "scripts": {
     "start": "NODE_ENV=production node dist/index.js",
