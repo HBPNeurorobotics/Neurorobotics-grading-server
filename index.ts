@@ -7,11 +7,12 @@ const http = require('http');
 const fs = require('fs');
 
 // For debugging on https://localhost
+/*
 const https = require('https');
 const privateKey  = fs.readFileSync('sslcert/server.key', 'utf8');
 const certificate = fs.readFileSync('sslcert/server.crt', 'utf8');
 const credentials = {key: privateKey, cert: certificate};
-
+*/
 
 const app = express();
 app.use(express.json());
@@ -208,7 +209,8 @@ app.get('/check-token', async (req, res) => {
 
 // Express configuration
 const httpServer = http.createServer(app);
-const httpsServer = https.createServer(credentials, app);
-
 httpServer.listen(3000, () => console.log('Server listening on port 3000!'));
-httpsServer.listen(8443, () => console.log('Server listening on port 8443!'));
+
+// For debugging on https://localhost
+//const httpsServer = https.createServer(credentials, app);
+//httpsServer.listen(8443, () => console.log('Server listening on port 8443!'));
