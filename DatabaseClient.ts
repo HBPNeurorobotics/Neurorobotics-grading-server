@@ -101,69 +101,83 @@ export default class DatabaseClient {
     return q.resolve('Successful creation of an edX grade entry in the database');
   }
 
-  async appendUserFinalGrades(userId, data) {
-    const userRef = this.db.collection('users').doc(userId);
+  processFinalGradesBody(data, withUsers=false) {
+    const gradingServerRepoUrl = 'https://github.com/HBPNeurorobotics/Neurorobotics-grading-server';
+    const msg = `The body of the request has an invalid format. Check the API documentation at ${gradingServerRepoUrl}`;
+    const exception = { msg: msg };
+    if (!data.finalGrades){
+      try { 
+        data = JSON.parse(data);
+      } catch(_err) {
+        throw(exception);
+      }
+    }
+    const finalGrades = data.finalGrades;
+    if (finalGrades && !withUsers) return finalGrades;
+    if (finalGrades && withUsers && finalGrades.users) return finalGrades.users;
+    throw(exception);
+  }
+
+  async setGrades(userGrades, usersRef, userId) {
+    let userRef =  usersRef.doc(userId);
     let doc = await userRef.get();
     let userDoc = doc.data();
-    let response = data;
-    const submittedGrades = data.finalGrades;
+    if (!userDoc) return q.reject({ msg: `User ${userId} has no submission at all.` });
     try {
-      Object.keys(submittedGrades).forEach(header => {
-        const grades =  submittedGrades[header];
-        let docSubheaders = userDoc[header];
-        if (!docSubheaders) throw({ msg: `User ${userId} has no submission for ${header}.` });
-        Object.keys(grades).forEach(subheader => {
-          const grade = grades[subheader];
-          if (docSubheaders[subheader]){ 
-            docSubheaders[subheader].finalGrade = grade;
-          } else { 
-          throw({ msg: `User ${userId} has no submission for ${subheader}. Grading in edX will not be possible.`});
+      Object.keys(userGrades).forEach(header => {
+          const grades = userGrades[header];
+          if (userDoc[header]) {
+              Object.keys(grades).forEach(async (subheader) => {
+                  const grade = grades[subheader];
+                  if (!userDoc[header][subheader]) throw ({ msg: `User ${userId} has no submission for ${subheader}.` });
+                  userDoc[header][subheader].finalGrade = grade;
+              });
           }
-        })
-      })
-      await userRef.update(userDoc)
-      .catch(err => { throw(err); });
-    } catch(error) {
+          else throw ({ msg: `User ${userId} has no submission for ${header}.` });
+      });
+    } catch (error) {
       return q.reject(error);
     }
-    response.msg = `The grades of user ${userId} have been successfully updated in NRP database.`
-    return q.resolve(response);
+    return userRef.update(userDoc);
+  }
+
+  async appendUserFinalGrades(userId, data) {
+      let grades = {finalGrades: {users: {} }};
+      try {
+        grades.finalGrades.users[userId] = this.processFinalGradesBody(data);
+      } catch(error) {
+        return q.reject(error);
+      }
+      return await this.appendFinalGrades(grades);
   }
 
   async appendFinalGrades(data) {
-    const usersRef = this.db.collection('users');
-    let response = data;
-    const submittedGrades = data.finalGrades.users;
-    let promises:Promise<any>[] = [];
-    try {
-      Object.keys(submittedGrades).forEach(async userId => {
-        const userGrades = submittedGrades[userId];
-        let userRef = usersRef.doc(userId);
-        let doc = await userRef.get();
-        let userDoc = doc.data();
-        if (!userDoc) throw({ msg: `User ${userId} has no submission at all.`});
-        Object.keys(userGrades).forEach(header => {
-          const grades = userGrades[header];
-          if (userDoc[header]){
-            Object.keys(grades).forEach(async subheader => {
-              const grade = grades[subheader];
-              if (userDoc[header][subheader]) { 
-                userDoc[header][subheader].finalGrade = grade;
-                promises.push(userRef.update(userDoc));
-            } else throw({ msg: `User ${userId} has no submission for ${subheader}.` });
-            })
-          } else throw({ msg: `User ${userId} has no submission for ${header}.` });
-        })
-      })
-    } catch(error) {
-      if (!error.msg) error.msg = '';
-      error.msg += ' Grading in edX will not be possible.';
-      return q.reject(error);
-    }
-    return await q.all(promises).then( () => {
-      response.msg = `The grades have been successfully updated in NRP database.`
-      return q.resolve(response);
-    });
+      const usersRef = this.db.collection('users');
+      let response = data;
+      let submittedGrades;
+      try {
+        // The body can be a JSON string or a JS Object depending on the sender
+        submittedGrades = this.processFinalGradesBody(data, true);
+      } catch(error) {
+        return q.reject(error);
+      }
+      let promises : Array<any> = [];
+      try {
+          Object.keys(submittedGrades).forEach(async (userId) => {
+              const userGrades = submittedGrades[userId];
+              // Populates the array promises with Firebase update requests
+              promises.push(this.setGrades(userGrades, usersRef, userId));
+          });
+      } catch (error) {
+        if (!error.msg)
+            error.msg = '';
+        error.msg += ' Grading in edX will not be possible.';
+        return q.reject(error);
+      }
+      return await q.all(promises).then(() => {
+          response.msg = `The grades have been successfully updated in NRP database.`;
+          return q.resolve(response);
+      });
   }
 
   async submitUserGrades(userDoc, header, selectedUser=false) {
