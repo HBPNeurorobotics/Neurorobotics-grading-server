@@ -104,14 +104,8 @@ export default class DatabaseClient {
   processFinalGradesBody(data, withUsers=false) {
     const gradingServerRepoUrl = 'https://github.com/HBPNeurorobotics/Neurorobotics-grading-server';
     const msg = `The body of the request has an invalid format. Check the API documentation at ${gradingServerRepoUrl}`;
-    const exception = { msg: msg };
-    if (!data.finalGrades){
-      try { 
-        data = JSON.parse(data);
-      } catch(_err) {
-        throw(exception);
-      }
-    }
+    const exception = { msg: msg, body: data };
+    if (!data.finalGrades) throw(exception);
     const finalGrades = data.finalGrades;
     if (finalGrades && !withUsers) return finalGrades;
     if (finalGrades && withUsers && finalGrades.users) return finalGrades.users;
@@ -128,7 +122,7 @@ export default class DatabaseClient {
           const grades = userGrades[header];
           if (userDoc[header]) {
               Object.keys(grades).forEach(async (subheader) => {
-                  const grade = grades[subheader];
+                  const grade = Number(grades[subheader]);
                   if (!userDoc[header][subheader]) throw ({ msg: `User ${userId} has no submission for ${subheader}.` });
                   userDoc[header][subheader].finalGrade = grade;
               });
@@ -156,7 +150,7 @@ export default class DatabaseClient {
       let response = data;
       let submittedGrades;
       try {
-        // The body can be a JSON string or a JS Object depending on the sender
+        // Handles body format errors
         submittedGrades = this.processFinalGradesBody(data, true);
       } catch(error) {
         return q.reject(error);
@@ -175,7 +169,7 @@ export default class DatabaseClient {
         return q.reject(error);
       }
       return await q.all(promises).then(() => {
-          response.msg = `The grades have been successfully updated in NRP database.`;
+          response.msg = 'The grades have been successfully updated in NRP database.';
           return q.resolve(response);
       });
   }

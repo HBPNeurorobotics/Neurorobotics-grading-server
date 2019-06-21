@@ -4,10 +4,10 @@ const lti = require('ims-lti')
 const q = require('q');
 const ejs = require('ejs');
 const http = require('http');
-const fs = require('fs');
 
 // For debugging on https://localhost
 /*
+const fs = require('fs');
 const https = require('https');
 const privateKey  = fs.readFileSync('sslcert/server.key', 'utf8');
 const certificate = fs.readFileSync('sslcert/server.crt', 'utf8');
@@ -49,7 +49,7 @@ const handleError = (res, err) => {
   if (errType === 'String' || errType === 'Error' || !err.code) {
     if (errType === 'Error') {
       console.error('[ERROR] ' + err + '\n' + err.stack);
-      err = err.message;
+      err = err.msg;
     } else console.error('[ERROR] ' + err);
     res.status(500).send(err);
   } else {
