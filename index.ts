@@ -6,18 +6,17 @@ const ejs = require('ejs');
 const http = require('http');
 
 // For debugging on https://localhost
-/*
+
 const fs = require('fs');
 const https = require('https');
 const privateKey  = fs.readFileSync('sslcert/server.key', 'utf8');
 const certificate = fs.readFileSync('sslcert/server.crt', 'utf8');
 const credentials = {key: privateKey, cert: certificate};
-*/
+
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE');
@@ -106,52 +105,54 @@ app.post('/submission', async (req, res) => {
   }
 });
 
+let createEdxGradeEntry = async (req, token) => {
+  // We store part of the req object in the Firebase database 
+  // We need req's body for later submission to edX, actually two of its LTI parameters:
+  // 'lis_outcome_service_url', the url where to submit the edX grade, and
+  // lis_result_sourcedid', a unique identifier of the pair (edX LTI unit, edX user)
+  // Some req properties are filtered out as they cannot be serialized 
+  // (none of them, except body, are useful for the edX send-and-replace call).
+  const INCLUDE = ['body', 'raw', 'originalUrl', 'protocol', 'method', 'headers']; 
+  let filteredRequest = {};
+  Object.keys(req).forEach(key => {
+    if (INCLUDE.indexOf(key) !== -1) filteredRequest[key] = req[key]; 
+  });
+  filteredRequest['connection'] = { encrypted: req.connection.encrypted };
+  return databaseClient.createEdxGradeEntry({
+    request: filteredRequest,
+    token  
+  })
+
+}
+
 app.post('/edx-launch', async (req, res) => {
   try {
     const ltiKey = config.ltiConsumerKey;
     const ltiSecret = config.ltiConsumerSecret;
     let provider = new lti.Provider(ltiKey, ltiSecret);
-    let validator = provider.valid_request.bind(provider);
-    await q.denodeify(validator)(req)
-    .then(isValid => {
+    provider.valid_request(req, async (isValid, err) => {
       if (!isValid) {
         const msg = 'Invalid LTI launch request';
         throw(msg);
       }
-    })
-    .catch(err => {
-      console.error('LTI validation error');
-      throw(err);
-    });
-    const token = utils.generateToken(
-      config.tokenEncryptionKey, 
-      req.body['lis_result_sourcedid']
-    );
-    // We store part of the req object in the Firebase database 
-    // We need req's body for later submission to edX, actually two of its LTI parameters:
-    // 'lis_outcome_service_url', the url where to submit the edX grade, and
-    // lis_result_sourcedid', a unique identifier of the pair (edX LTI unit, edX user)
-    // Some req properties are filtered out as they cannot be serialized 
-    // (none of them, except body, are useful for the edX send-and-replace call).
-    const INCLUDE = ['body', 'raw', 'originalUrl', 'protocol', 'method', 'headers']; 
-    let filteredRequest = {};
-    Object.keys(req).forEach(key => {
-      if (INCLUDE.indexOf(key) !== -1) filteredRequest[key] = req[key]; 
-    });
-    filteredRequest['connection'] = { encrypted: req.connection.encrypted };
-    await databaseClient.createEdxGradeEntry({
-      request: filteredRequest,
-      token  
-    })
-    .catch(err => { throw(err) });
-    const launchWidget = await q.denodeify(ejs.renderFile)('views/launch_exercise_show_token.ejs', 
-      {
-        token,
-        exercise: req.body['custom_subheader'],
-        redirect: 'https://collab.humanbrainproject.eu/#/collab'
+      if (err) {
+        console.error('LTI validation error');
+        throw(err);
       }
-    );
-    res.send(launchWidget);
+      const token = utils.generateToken(
+        config.tokenEncryptionKey, 
+        req.body['lis_result_sourcedid']
+      );
+      createEdxGradeEntry(req, token).catch(err => { throw(err) });
+      const launchWidget = await q.denodeify(ejs.renderFile)('views/launch_exercise_show_token.ejs', 
+        {
+          token,
+          exercise: req.body['custom_subheader'],
+          redirect: 'https://collab.humanbrainproject.eu/#/collab'
+        }
+      );
+      res.send(launchWidget);
+    });
   } catch (err) {
     handleError(res, err);
   }
@@ -226,5 +227,5 @@ const httpServer = http.createServer(app);
 httpServer.listen(3000, () => console.log('Server listening on port 3000!'));
 
 // For debugging on https://localhost
-//const httpsServer = https.createServer(credentials, app);
-//httpsServer.listen(8443, () => console.log('Server listening on port 8443!'));
+const httpsServer = https.createServer(credentials, app);
+httpsServer.listen(8443, () => console.log('Server listening on port 8443!'));

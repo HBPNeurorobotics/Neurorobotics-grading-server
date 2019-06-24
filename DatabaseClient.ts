@@ -128,6 +128,11 @@ export default class DatabaseClient {
     throw(exception);
   }
 
+  appendFinalGradesFailureMessage(error) {
+    if (!error.msg) error.msg = '';
+    error.msg += ' Grading in edX will not be possible. Submission of final grades to NRP database failed.';
+  }
+
   async setGrades(userGrades, usersRef, userId) {
     let userRef =  usersRef.doc(userId);
     let doc = await userRef.get();
@@ -147,6 +152,7 @@ export default class DatabaseClient {
           } else throw({ msg: `User ${userId} has no submission for ${header}.` });
       });
     } catch (error) {
+      this.appendFinalGradesFailureMessage(error);
       return q.reject(error);
     }
     return userRef.update(userDoc);
@@ -185,9 +191,7 @@ export default class DatabaseClient {
               );
           });
       } catch (error) {
-        if (!error.msg)
-            error.msg = '';
-        error.msg += ' Grading in edX will not be possible.';
+        this.appendFinalGradesFailureMessage(error);
         return q.reject(error);
       }
       return await q.all(promises).then(() => {
