@@ -105,7 +105,7 @@ app.post('/submission', async (req, res) => {
   }
 });
 
-let createEdxGradeEntry = async (req, token) => {
+const createEdxGradeEntry = async (req, token) => {
   // We store part of the req object in the Firebase database 
   // We need req's body for later submission to edX, actually two of its LTI parameters:
   // 'lis_outcome_service_url', the url where to submit the edX grade, and
@@ -121,8 +121,7 @@ let createEdxGradeEntry = async (req, token) => {
   return databaseClient.createEdxGradeEntry({
     request: filteredRequest,
     token  
-  })
-
+  });
 }
 
 app.post('/edx-launch', async (req, res) => {
@@ -130,9 +129,10 @@ app.post('/edx-launch', async (req, res) => {
     const ltiKey = config.ltiConsumerKey;
     const ltiSecret = config.ltiConsumerSecret;
     let provider = new lti.Provider(ltiKey, ltiSecret);
-    provider.valid_request(req, async (isValid, err) => {
+    provider.valid_request(req, (err, isValid) => {
       if (!isValid) {
         const msg = 'Invalid LTI launch request';
+        console.error(msg);
         throw(msg);
       }
       if (err) {
@@ -143,15 +143,15 @@ app.post('/edx-launch', async (req, res) => {
         config.tokenEncryptionKey, 
         req.body['lis_result_sourcedid']
       );
-      createEdxGradeEntry(req, token).catch(err => { throw(err) });
-      const launchWidget = await q.denodeify(ejs.renderFile)('views/launch_exercise_show_token.ejs', 
+      createEdxGradeEntry(req, token)
+      .then( () => q.denodeify(ejs.renderFile)('views/launch_exercise_show_token.ejs', 
         {
           token,
           exercise: req.body['custom_subheader'],
           redirect: 'https://collab.humanbrainproject.eu/#/collab'
-        }
-      );
-      res.send(launchWidget);
+        }))
+      .then(result => { res.send(result); })
+      .catch(err => { throw(err) });
     });
   } catch (err) {
     handleError(res, err);
