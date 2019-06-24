@@ -18,6 +18,20 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'accept, Authorization, Context-Id, Content-Type,  Content-Length, X-Requested-With'
+  );
+  res.setHeader('Access-Control-Expose-Headers', 'uuid, content-disposition');
+  if ('OPTIONS' == req.method) {
+    res.sendStatus(200);
+  } 
+  next();
+});
+
 import configurationManager from './configurationManager';
 import DatabaseClient from './DatabaseClient';
 import FileStore from './FileStore';

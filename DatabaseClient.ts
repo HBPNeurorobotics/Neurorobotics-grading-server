@@ -92,7 +92,6 @@ export default class DatabaseClient {
     const edxGradesCollection = this.db.collection('edx-grade-identifiers');
     // Add the edx lis grade entry in the Firestore database
     const doc = edxGradesCollection.doc();
-    console.log(data);
     return doc.set(data);
   }
 
@@ -104,11 +103,28 @@ export default class DatabaseClient {
   processFinalGradesBody(data, withUsers=false) {
     const gradingServerRepoUrl = 'https://github.com/HBPNeurorobotics/Neurorobotics-grading-server';
     const msg = `The body of the request has an invalid format. Check the API documentation at ${gradingServerRepoUrl}`;
-    const exception = { msg: msg, body: data };
-    if (!data.finalGrades) throw(exception);
+    const exception = { msg: msg, body: data, detail: '' };
+    if (!data.finalGrades) {
+      const bodyKey = Object.keys(data)[0];
+      if (bodyKey) {
+      // This is a hack. 
+      // The deserialization of the request body can fail on some requests in spite of 
+      // the use of express.json() and express.urlencoded().
+        try {
+          data = JSON.parse(bodyKey);
+        } catch(err) {
+          exception.detail = 'JSON Parsing error';
+        }
+      }
+      if (!data.finalGrades) {
+        exception.detail = 'Missing field: finalGrades';
+        throw(exception);
+      }
+    }
     const finalGrades = data.finalGrades;
     if (finalGrades && !withUsers) return finalGrades;
     if (finalGrades && withUsers && finalGrades.users) return finalGrades.users;
+    exception.detail = 'Missing field: users';
     throw(exception);
   }
 
@@ -121,13 +137,14 @@ export default class DatabaseClient {
       Object.keys(userGrades).forEach(header => {
           const grades = userGrades[header];
           if (userDoc[header]) {
-              Object.keys(grades).forEach(async (subheader) => {
-                  const grade = Number(grades[subheader]);
-                  if (!userDoc[header][subheader]) throw ({ msg: `User ${userId} has no submission for ${subheader}.` });
-                  userDoc[header][subheader].finalGrade = grade;
-              });
-          }
-          else throw ({ msg: `User ${userId} has no submission for ${header}.` });
+            Object.keys(grades).forEach(subheader => {
+                const grade = Number(grades[subheader]);
+                if (!userDoc[header][subheader]){ 
+                  throw({ msg: `User ${userId} has no submission for ${subheader}.` });
+                }
+                userDoc[header][subheader].finalGrade = grade;
+            });
+          } else throw({ msg: `User ${userId} has no submission for ${header}.` });
       });
     } catch (error) {
       return q.reject(error);
@@ -146,6 +163,9 @@ export default class DatabaseClient {
   }
 
   async appendFinalGrades(data) {
+      // Some request bodies fail to be deserialized in spite of express.json() and express.urlencoded()
+      if (typeof data === 'string')
+        data = JSON.parse(Object.keys(data)[0]);
       const usersRef = this.db.collection('users');
       let response = data;
       let submittedGrades;
@@ -160,7 +180,9 @@ export default class DatabaseClient {
           Object.keys(submittedGrades).forEach(async (userId) => {
               const userGrades = submittedGrades[userId];
               // Populates the array promises with Firebase update requests
-              promises.push(this.setGrades(userGrades, usersRef, userId));
+              promises.push(
+                this.setGrades(userGrades, usersRef, userId).catch(err => q.reject(err))
+              );
           });
       } catch (error) {
         if (!error.msg)
@@ -182,7 +204,7 @@ export default class DatabaseClient {
       else return q.resolve(); // We ignore this user, as she/he didn't submit anything yet for 'header'
     }
     try {
-      Object.keys(userDoc[header]).forEach(async subheader => {
+      Object.keys(userDoc[header]).forEach(subheader => {
         const userSubheader = userDoc[header][subheader];
         const grade = userSubheader.finalGrade;
         if (!grade) throw(`User ${userId} has no final grade for ${header}/${subheader}.`);
