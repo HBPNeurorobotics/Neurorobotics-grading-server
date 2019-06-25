@@ -210,9 +210,10 @@ app.get('/check-token', async (req, res) => {
     const dataBaseRequest = await databaseClient.getEdxGradeIdentifiers(req.query.token)
     .catch(err => { throw(err) });
     
+    const launchRequestBody = dataBaseRequest['request']['body'];
     res.send({
-      custom_header: dataBaseRequest['custom_header'],
-      custom_subheader: dataBaseRequest['custom_subheader']
+      custom_header: launchRequestBody['custom_header'],
+      custom_subheader: launchRequestBody['custom_subheader']
     })
   } catch (err) {
     handleError(res, err);
