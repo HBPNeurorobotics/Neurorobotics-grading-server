@@ -42,13 +42,13 @@ export default class EdxClient {
         let service = new lti.OutcomeService(options);
         return service.send_replace_result(Number(grade), (err, result) => {
             if (err) {
-                console.log(err);
+                console.error(err);
                 throw(err);
             }
             if (!result) { 
-            const msg = 'The update of the grade failed.';
-                console.log(msg);
-                throw(msg);
+              const msg = '[EdxClient:ltiSendAndReplace] The update of the grade failed.';
+              console.log(msg);
+              throw(msg);
             }
             return result;
         });
