@@ -211,9 +211,9 @@ export default class DatabaseClient {
       Object.keys(userDoc[header]).forEach(subheader => {
         const userSubheader = userDoc[header][subheader];
         const grade = userSubheader.finalGrade;
-        if (!grade) throw(`User ${userId} has no final grade for ${header}/${subheader}.`);
+        if (!grade) throw({ msg: `User ${userId} has no final grade for ${header}/${subheader}.`});
         const edxIdentifiers = userSubheader.edx;
-        if (!edxIdentifiers) throw(`User ${userId} has no edX identifiers for ${header}/${subheader}.`);
+        if (!edxIdentifiers) throw({ msg: `User ${userId} has no edX identifiers for ${header}/${subheader}.`});
         promises.push(this.edxClient.ltiSendAndReplace(grade, edxIdentifiers.request));
       })
     } catch(error) {

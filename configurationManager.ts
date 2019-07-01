@@ -43,9 +43,18 @@ const resolveReplaceEnvVariables = (str: string) => {
   return str.replace(/\$([A-Za-z]*)/g, (_m, v) => process.env[v] || '');
 };
 
+const checkConfigKeys = config => {
+  const mandatoryKeys = ['ltiConsumerSecret', 'ltiConsumerKey', 'tokenEncryptionKey', 'adminToken', 'databaseURL', 'fileStorePath'];
+  mandatoryKeys.forEach(key => {
+    const value = config[key];
+    if (typeof value === 'undefined') throw(`Missing configuration key ${key}`);
+  })
+}
+
 const loadConfigFile = () => {
   try {
     configFile = JSON.parse(fs.readFileSync(CONFIG_FILE));
+    checkConfigKeys(configFile);
     configuration.notify(configFile);
     return configFile;
   } catch (err) {
