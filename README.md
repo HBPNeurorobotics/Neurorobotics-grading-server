@@ -1,6 +1,15 @@
 # Neurorobotics-grading-server
 NodeJS server designed to record student grades (MOOC) in a database 
 
+## Building and running the grading server
+
+Inside a clone of this repository, run the following commands:
+```
+npm run-script build
+npm start
+```
+If you are an HBP or BBP administrator of the NRP MOOC, you may want to copy `config.json` and `serviceAccount.json` from the Neurorobotics-MOOC-admin repository at the root of your cloned repository and in the `dist` subfolder.
+
 ## API
 
 Each HTTP request requires the Authorization header to be filled with an OIDC token. In the current setting, this token is the OIDC token associated to the HBP account of the user performing the request, except for the requests that require administrator privileges.
