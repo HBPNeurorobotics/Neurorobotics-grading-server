@@ -1,5 +1,5 @@
 # Neurorobotics-grading-server
-NodeJS server designed to record student grades (MOOC) in a database 
+NodeJS server designed to record student grades (MOOC) in a Firestore database.
 
 ## Building and running the grading server
 
